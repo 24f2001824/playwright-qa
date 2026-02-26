@@ -1,27 +1,59 @@
-from playwright.sync_api import sync_playwright
-import time
+import asyncio
+from playwright.async_api import async_playwright
 
-seeds = range(70, 80)
-total = 0
+async def get_sum(url):
+    async with async_playwright() as p:
+        browser = await p.chromium.launch(headless=True)
+        page = await browser.new_page()
+        await page.goto(url)
+        
+        try:
+            # Wait for at least one table
+            await page.wait_for_selector('table', timeout=10000)
+        except Exception:
+            pass
 
-with sync_playwright() as p:
-    browser = p.chromium.launch()
-    page = browser.new_page()
+        # small wait to ensure JS is executed
+        await page.wait_for_timeout(2000)
 
+        # In Playwright, we can evaluate a script on the page
+        table_sum = await page.evaluate(r'''() => {
+            let total = 0;
+            const tables = document.querySelectorAll('table');
+            for (const table of tables) {
+                const cells = table.querySelectorAll('td, th'); // th also sometimes contains numbers
+                for (const cell of cells) {
+                    const text = cell.innerText.trim();
+                    if (text) {
+                        const val = parseFloat(text);
+                        if (!isNaN(val)) {
+                            // Check if it's strictly a number or if we need more logic
+                            // typically just parsefloat is enough, but some things like "12A" would parse as 12.
+                            // To be safer, use regex or strict cast.
+                            if (/^-?[0-9]+(?:\.[0-9]+)?$/.test(text)) {
+                                total += val;
+                            }
+                        }
+                    }
+                }
+            }
+            return total;
+        }''')
+        await browser.close()
+        return table_sum
+
+async def main():
+    seeds = range(70, 80)
+    total_sum = 0
     for seed in seeds:
-        url = f"https://sanand0.github.io/tdsdata/playwright-qa/index.html?seed={seed}"
-        page.goto(url, wait_until="domcontentloaded")
+        url = f"https://sanand0.github.io/tdsdata/js_table/?seed={seed}"
+        try:
+            s = await get_sum(url)
+            print(f"Seed {seed}: {s}")
+            total_sum += s
+        except Exception as e:
+            print(f"Failed for seed {seed}: {e}")
+    print(f"Total sum: {total_sum}")
 
-        time.sleep(3)
-
-        values = page.locator(".value").all()
-
-        for v in values:
-            try:
-                total += float(v.inner_text())
-            except:
-                pass
-
-    browser.close()
-
-print("TOTAL_SUM =", total)
+if __name__ == "__main__":
+    asyncio.run(main())

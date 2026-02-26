@@ -10,16 +10,15 @@ with sync_playwright() as p:
 
     for seed in seeds:
         url = f"https://sanand0.github.io/tdsdata/playwright-qa/index.html?seed={seed}"
-        page.goto(url)
+        page.goto(url, wait_until="domcontentloaded")
 
         time.sleep(3)
 
-        frame = page.frame_locator("iframe").first
-        cells = frame.locator("td").all()
+        values = page.locator(".value").all()
 
-        for c in cells:
+        for v in values:
             try:
-                total += float(c.inner_text())
+                total += float(v.inner_text())
             except:
                 pass
 
